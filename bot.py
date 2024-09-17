@@ -1249,17 +1249,19 @@ conn.commit()
 def initialize_user(user_id, tariff):
     tariff_tokens = {'Базовый': 1000, 'Продвинутый': 2000, 'Премиум': 3000}
     tokens_to_add = tariff_tokens.get(tariff, 0)
-    cursor.execute("SELECT tokens_balance FROM users WHERE user_id=?", (user_id,))
-    result = cursor.fetchone()
-    if result:
-        tokens_balance = result[0] + tokens_to_add
-        cursor.execute("UPDATE users SET tariff=?, tokens_balance=? WHERE user_id=?", (tariff, tokens_balance, user_id))
-    else:
-        cursor.execute("""
-            INSERT INTO users (user_id, tariff, tokens_balance, has_selected_model) 
-            VALUES (?, ?, ?, 0)
-        """, (user_id, tariff, tokens_to_add))
-    conn.commit()
+    with sqlite3.connect('users.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT tokens_balance FROM users WHERE user_id=?", (user_id,))
+        result = cursor.fetchone()
+        if result:
+            tokens_balance = result[0] + tokens_to_add
+            cursor.execute("UPDATE users SET tariff=?, tokens_balance=? WHERE user_id=?", (tariff, tokens_balance, user_id))
+        else:
+            cursor.execute("""
+                INSERT INTO users (user_id, tariff, tokens_balance, has_selected_model) 
+                VALUES (?, ?, ?, 0)
+            """, (user_id, tariff, tokens_to_add))
+        conn.commit()
 
 # Проверка доступа пользователя
 async def check_user_access(user_id, required_tariff="Базовый"):
@@ -1320,15 +1322,18 @@ def generate_robokassa_link(out_sum, description, user_id):
         # Логирование параметров
         logging.info(f"Generating payment for user_id: {user_id_int}, out_sum: {out_sum_float}, description: {description}")
 
-        # Сохранение платежа в базе данных
-        cursor.execute(
-            "INSERT INTO payments (user_id, amount, tariff, status) VALUES (?, ?, ?, ?)", 
-            (user_id_int, out_sum_float, description, 'pending')
-        )
-        conn.commit()
+        # Открытие нового соединения для каждой операции
+        with sqlite3.connect('users.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO payments (user_id, amount, tariff, status) VALUES (?, ?, ?, ?)", 
+                (user_id_int, out_sum_float, description, 'pending')
+            )
+            conn.commit()
 
-        # Получаем inv_id последнего вставленного платежа
-        inv_id = cursor.lastrowid
+            # Получаем inv_id последнего вставленного платежа
+            inv_id = cursor.lastrowid
+            logging.info(f"Inserted payment with inv_id: {inv_id}")
 
         # Формирование строки для подписи
         signature_string = f"{ROBOKASSA_MERCHANT_LOGIN}:{out_sum_str}:{inv_id}:{ROBOKASSA_PASSWORD1}"
