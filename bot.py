@@ -1218,6 +1218,8 @@ class UserStates(StatesGroup):
 # Настройка базы данных
 conn = sqlite3.connect('users.db')
 cursor = conn.cursor()
+
+# Создание таблицы users
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
@@ -1228,7 +1230,20 @@ cursor.execute('''
         has_selected_model INTEGER DEFAULT 0
     )
 ''')
+
+# Создание таблицы payments
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS payments (
+        inv_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        amount REAL,
+        tariff TEXT,
+        status TEXT
+    )
+''')
+
 conn.commit()
+
 
 # Функция для инициализации/обновления пользователя
 def initialize_user(user_id, tariff):
@@ -1296,31 +1311,52 @@ ROBOKASSA_SUCCESS_URL = os.getenv('ROBOKASSA_SUCCESS_URL')
 ROBOKASSA_FAIL_URL = os.getenv('ROBOKASSA_FAIL_URL')
 
 def generate_robokassa_link(out_sum, description, user_id):
-    inv_id = str(uuid.uuid4())  # Генерация уникального InvId
-    # Сохранение платежа в базе данных
-    cursor.execute(
-        "INSERT INTO payments (inv_id, user_id, amount, tariff, status) VALUES (?, ?, ?, ?, ?)", 
-        (inv_id, user_id, out_sum, description, 'pending')
-    )
-    conn.commit()
+    try:
+        # Приведение типов данных
+        user_id_int = int(user_id)
+        out_sum_float = float(out_sum)
+        out_sum_str = f"{out_sum_float:.2f}"  # Форматирование суммы с двумя десятичными знаками
 
-    # Формирование строки для хэша
-    signature_string = f"{ROBOKASSA_MERCHANT_LOGIN}:{out_sum}:{inv_id}:{ROBOKASSA_PASSWORD1}"
-    signature = hashlib.md5(signature_string.encode('utf-8')).hexdigest()
+        # Логирование параметров
+        logging.info(f"Generating payment for user_id: {user_id_int}, out_sum: {out_sum_float}, description: {description}")
 
-    params = {
-        'MerchantLogin': ROBOKASSA_MERCHANT_LOGIN,
-        'OutSum': out_sum,
-        'InvId': inv_id,
-        'Description': description,
-        'SignatureValue': signature,
-        'ResultURL': ROBOKASSA_RESULT_URL,  # Например, https://yourdomain.com/robokassa/result
-        'SuccessURL': ROBOKASSA_SUCCESS_URL,  # Например, https://yourdomain.com/success
-        'FailURL': ROBOKASSA_FAIL_URL  # Например, https://yourdomain.com/fail
-    }
+        # Сохранение платежа в базе данных
+        cursor.execute(
+            "INSERT INTO payments (user_id, amount, tariff, status) VALUES (?, ?, ?, ?)", 
+            (user_id_int, out_sum_float, description, 'pending')
+        )
+        conn.commit()
 
-    url = f"https://auth.robokassa.ru/Merchant/Index.aspx?{urlencode(params)}"
-    return url
+        # Получаем inv_id последнего вставленного платежа
+        inv_id = cursor.lastrowid
+
+        # Формирование строки для подписи
+        signature_string = f"{ROBOKASSA_MERCHANT_LOGIN}:{out_sum_str}:{inv_id}:{ROBOKASSA_PASSWORD1}"
+        signature = hashlib.md5(signature_string.encode('utf-8')).hexdigest()
+
+        params = {
+            'MrchLogin': ROBOKASSA_MERCHANT_LOGIN,
+            'OutSum': out_sum_str,  # Используем форматированную сумму
+            'InvId': inv_id,
+            'Desc': description,
+            'SignatureValue': signature,
+            'Culture': 'ru',
+            'Encoding': 'utf-8',
+            # Дополнительные параметры, если необходимы
+            # 'Shp_user': user_id
+        }
+
+        url = f"https://auth.robokassa.ru/Merchant/Index.aspx?{urlencode(params)}"
+        
+        # Логирование сгенерированной ссылки
+        logging.info(f"Generated Robokassa link: {url}")
+        
+        return url
+    except Exception as e:
+        logging.error(f"Error in generate_robokassa_link: {e}")
+        raise
+
+
 
 # Создание клавиатур
 keyboard_level1 = create_keyboard([
@@ -1372,50 +1408,64 @@ async def cmd_start(message: Message, state: FSMContext):
 # Обработчик выбора тарифа
 @router.message(StateFilter(UserStates.selecting_tariff))
 async def process_tariff_selection(message: Message, state: FSMContext):
-    tariff = message.text
-    if tariff == "🔙 Назад":
-        await message.answer("Вы вернулись в главное меню.", reply_markup=keyboard_level1)
-        await state.clear()
-        return
-    if tariff == "ℹ️ Инфо":
-        info_message = (
-            "📋 **Информация о тарифах:**\n\n"
-            "🏆 **Премиум**:\n- Неограниченные токены\n- Все модели\n- Приоритетная поддержка\n Стоимость: 3 000 р\n\n"
-            "📈 **Продвинутый**:\n- 2000 токенов\n- Большинство моделей\n- Поддержка через бот\nСтоимость: 1 500 р\n\n"
-            "📉 **Базовый**:\n- 1000 токенов\n- Ограниченные модели\n- Поддержка через FAQ\n Стоимость:  300 р"
-        )
-        await message.answer(info_message, parse_mode="Markdown", reply_markup=keyboard_tariff_info)
-        return
-    if tariff not in ["📉 Базовый", "📈 Продвинутый", "🏆 Премиум"]:
-        await message.answer("Неверный выбор. Вернитесь в главное меню.", reply_markup=keyboard_level1)
-        await state.clear()
-        return
-    tariff_clean = tariff.split(' ')[-1]
-    if TESTING_MODE:
-        initialize_user(message.from_user.id, tariff_clean)
-        await message.answer(f"Вы приобрели тариф {tariff_clean}.", reply_markup=keyboard_level1)
-        await state.clear()
-    else:
-        # Определение стоимости тарифа
-        tariff_prices = {
-            'Базовый': 300,        # Стоимость в рублях
-            'Продвинутый': 1500,
-            'Премиум': 3000
-        }
-        out_sum = tariff_prices.get(tariff_clean, 0)
-        description = f'Покупка тарифа {tariff_clean}'
+    try:
+        tariff = message.text
+        logging.info(f"User {message.from_user.id} selected tariff: {tariff}")
 
-        # Генерация ссылки на оплату
-        payment_link = generate_robokassa_link(out_sum, tariff_clean, message.from_user.id)
+        if tariff == "🔙 Назад":
+            await message.answer("Вы вернулись в главное меню.", reply_markup=keyboard_level1)
+            await state.clear()
+            return
+        
+        if tariff == "ℹ️ Инфо":
+            info_message = (
+                "📋 **Информация о тарифах:**\n\n"
+                "🏆 **Премиум**:\n- Неограниченные токены\n- Все модели\n- Приоритетная поддержка\n Стоимость: 3 000 р\n\n"
+                "📈 **Продвинутый**:\n- 2000 токенов\n- Большинство моделей\n- Поддержка через бот\nСтоимость: 1 500 р\n\n"
+                "📉 **Базовый**:\n- 1000 токенов\n- Ограниченные модели\n- Поддержка через FAQ\n Стоимость:  300 р"
+            )
+            await message.answer(info_message, parse_mode="Markdown", reply_markup=keyboard_tariff_info)
+            return
+        
+        if tariff not in ["📉 Базовый", "📈 Продвинутый", "🏆 Премиум"]:
+            await message.answer("Неверный выбор. Вернитесь в главное меню.", reply_markup=keyboard_level1)
+            await state.clear()
+            return
+        
+        tariff_clean = tariff.split(' ')[-1]
+        
+        if TESTING_MODE:
+            initialize_user(message.from_user.id, tariff_clean)
+            await message.answer(f"Вы приобрели тариф {tariff_clean}.", reply_markup=keyboard_level1)
+            await state.clear()
+        else:
+            # Определение стоимости тарифа
+            tariff_prices = {
+                'Базовый': 300,        # Стоимость в рублях
+                'Продвинутый': 1500,
+                'Премиум': 3000
+            }
+            out_sum = tariff_prices.get(tariff_clean, 0)
+            description = f'Покупка тарифа {tariff_clean}'
 
-        # Отправка ссылки пользователю
-        await message.answer(
-            f"Для приобретения тарифа **{tariff_clean}** перейдите по [ссылке для оплаты]({payment_link}).",
-            parse_mode="Markdown",
-            disable_web_page_preview=True,
-            reply_markup=keyboard_level1
-        )
+            # Генерация ссылки на оплату
+            payment_link = generate_robokassa_link(out_sum, tariff_clean, message.from_user.id)
+
+            # Отправка ссылки пользователю
+            await message.answer(
+                f"Для приобретения тарифа **{tariff_clean}** перейдите по [ссылке для оплаты]({payment_link}).",
+                parse_mode="Markdown",
+                disable_web_page_preview=True,
+                reply_markup=keyboard_level1
+            )
+            await state.clear()
+    except Exception as e:
+        logging.error(f"Error in process_tariff_selection: {e}")
+        await message.answer("Произошла ошибка при обработке вашего запроса. Пожалуйста, попробуйте позже.")
         await state.clear()
+
+
+
 
 
 # Обработчик текстовых сообщений
