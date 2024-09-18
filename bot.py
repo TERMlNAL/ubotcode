@@ -171,16 +171,17 @@ def generate_robokassa_link(out_sum, description, user_id):
         signature = hashlib.md5(signature_string.encode('utf-8')).hexdigest()
 
         params = {
-            'MrchLogin': ROBOKASSA_MERCHANT_LOGIN,
-            'OutSum': out_sum_str,  # Используем форматированную сумму
-            'InvId': inv_id,
-            'Desc': description,
-            'SignatureValue': signature,
-            'Culture': 'ru',
-            'Encoding': 'utf-8',
-            # Дополнительные параметры, если необходимы
-            # 'Shp_user': user_id
-        }
+        'MrchLogin': ROBOKASSA_MERCHANT_LOGIN,
+        'OutSum': out_sum_str,
+        'InvId': inv_id,
+        'Desc': description,
+        'SignatureValue': signature,
+        'Culture': 'ru',
+        'Encoding': 'utf-8',
+        'IsTest': '1' if TESTING_MODE else '0',
+        'ReturnUrl': ROBOKASSA_SUCCESS_URL,
+        'CancelUrl': ROBOKASSA_FAIL_URL
+    }
 
         url = f"https://auth.robokassa.ru/Merchant/Index.aspx?{urlencode(params)}"
         
