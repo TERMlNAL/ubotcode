@@ -1200,7 +1200,7 @@ if not all([API_TOKEN, OPENAI_API_KEY, PAYMENT_PROVIDER_TOKEN, SUPPORT_BOT_USERN
     logging.error("Пожалуйста, убедитесь, что все токены и ключи API заданы в файле .env")
     exit(1)
 
-TESTING_MODE = True  # Установите True для тестирования
+TESTING_MODE = False  # Установите True для тестирования
 
 # Инициализация бота и диспетчера
 bot = Bot(token=API_TOKEN)
