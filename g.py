@@ -1,4 +1,5 @@
 
+
 import asyncio
 import logging
 import os
@@ -31,7 +32,7 @@ if not all([API_TOKEN, OPENAI_API_KEY, PAYMENT_PROVIDER_TOKEN, SUPPORT_BOT_USERN
     logging.error("Пожалуйста, убедитесь, что все токены и ключи API заданы в файле .env")
     exit(1)
 
-TESTING_MODE = False  # T Установите True для тестирования
+TESTING_MODE = True  # Установите True для тестирования
 
 # Инициализация бота и диспетчера
 bot = Bot(token=API_TOKEN)
@@ -277,9 +278,9 @@ async def process_tariff_selection(message: Message, state: FSMContext):
         else:
             # Определение стоимости тарифа
             tariff_prices = {
-                'Базовый': 3,        # Стоимость в рублях
-                'Продвинутый': 15,
-                'Премиум': 30
+                'Базовый': 300,        # Стоимость в рублях
+                'Продвинутый': 1500,
+                'Премиум': 3000
             }
             out_sum = tariff_prices.get(tariff_clean, 0)
             description = f'Покупка тарифа {tariff_clean}'
