@@ -3,3 +3,8 @@ users.db
 venv/
 __pycache__/
 webhook.py
+# Логи
+*.log
+
+# Другие временные файлы
+udo journalctl -u fastapi.service -b --no-pager
