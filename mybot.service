@@ -1,0 +1,14 @@
+[Unit]
+Description=My Telegram Bot
+After=network.target
+
+[Service]
+User=botuser
+Group=botuser
+WorkingDirectory=/home/botuser/ubotcode
+ExecStart=/home/botuser/ubotcode/venv/bin/python bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[0;1;32m●[0m fastapi.service - FastAPI application for Robokassa webhook
+     Loaded: loaded (/etc/systemd/system/fastapi.service; enabled; vendor preset: enabled)
+     Active: [0;1;32mactive (running)[0m since Thu 2024-09-19 06:34:45 UTC; 2min 42s ago
+   Main PID: 19512 (uvicorn)
+      Tasks: 1 (limit: 1011)
+     Memory: 144.0M
+        CPU: 4.802s
+     CGroup: /system.slice/fastapi.service
+             └─19512 /home/botuser/ubotcode/venv/bin/python3 /home/botuser/ubotcode/venv/bin/uvicorn webhook:app --host 127.0.0.1 --port 8000
+
+Sep 19 06:34:45 249117.fornex.cloud systemd[1]: Started FastAPI application for Robokassa webhook.
+Sep 19 06:34:50 249117.fornex.cloud uvicorn[19512]: INFO:     Started server process [19512]
+Sep 19 06:34:50 249117.fornex.cloud uvicorn[19512]: INFO:     Waiting for application startup.
+Sep 19 06:34:50 249117.fornex.cloud uvicorn[19512]: INFO:     Application startup complete.
+Sep 19 06:34:50 249117.fornex.cloud uvicorn[19512]: INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)

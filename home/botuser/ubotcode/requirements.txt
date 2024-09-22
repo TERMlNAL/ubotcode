@@ -63,12 +63,3 @@ typing_extensions==4.12.2
 urllib3==2.2.3
 uvicorn==0.30.6
 yarl==1.11.1
-sqlalchemy
-psycopg2-binary
-aioredis
-gunicorn
-uvicorn
-redis
-asyncpg
-sqlalchemy
-asyncpg

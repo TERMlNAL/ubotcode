@@ -1,0 +1,13 @@
+[Unit]
+Description=FastAPI application for Robokassa webhook
+After=network.target
+
+[Service]
+User=botuser
+Group=botuser
+WorkingDirectory=/home/botuser/ubotcode
+Environment="PATH=/home/botuser/ubotcode/venv/bin"
+ExecStart=/home/botuser/ubotcode/venv/bin/uvicorn webhook:app --host 127.0.0.1 --port 8000
+
+[Install]
+WantedBy=multi-user.target
